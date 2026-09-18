@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, usestate } from "react";
 
 function App() {
   const [productos, setProductos] = useState([]);
@@ -6,7 +6,7 @@ function App() {
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    fetch("http://localhost:3000/api/productos")
+    fetch("https://mi-primer-servicio-cloud.onrender.com/api/productos")
       .then((response) => {
         if (!response.ok) {
           throw new Error("Error en el servidor");
