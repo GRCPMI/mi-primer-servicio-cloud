@@ -30,10 +30,11 @@ app.get("/api/estado", (req, res) => {
     });
 });
 
-// Ruta de la API de productos conectada dinámicamente a Google Sheets
+// Ruta de la API de productos
 app.get("/api/productos", async (req, res) => {
     try {
-        const response = await fetch(GOOGLE_SHEETS_URL);
+        // redirect: "follow" es clave para que Node siga la redirección 302 de Google
+        const response = await fetch(GOOGLE_SHEETS_URL, { redirect: "follow" });
         const productos = await response.json();
         res.json(productos);
     } catch (error) {
@@ -42,7 +43,7 @@ app.get("/api/productos", async (req, res) => {
     }
 });
 
-// Iniciar servidor (Siempre al final)
+// Iniciar servidor
 app.listen(PORT, () => {
     console.log(`Servidor ejecutándose en puerto ${PORT}`);
 });
