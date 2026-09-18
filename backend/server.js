@@ -4,6 +4,9 @@ const cors = require("cors");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// URL de tu aplicación web de Google Apps Script
+const GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbzOPwuTFbiNeur3p17cYuDe79l5-PBDjUWPmlW28rJCmTqoROymh917m9ErOCShM1Q1Xg/exec";
+
 // Middlewares
 app.use(cors());
 app.use(express.json());
@@ -27,41 +30,16 @@ app.get("/api/estado", (req, res) => {
     });
 });
 
-// Ruta de la API de productos (Reto 4: Incluye productos adicionales)
-app.get("/api/productos", (req, res) => {
-    const productos = [
-        {
-            id: 1, 
-            nombre: "Laptop",
-            precio: 15000,
-            categoria: "Computadoras"
-        },
-        {
-            id: 2,
-            nombre: "Mouse",
-            precio: 350,
-            categoria: "Accesorios"
-        },
-        {
-            id: 3,
-            nombre: "Teclado",
-            precio: 700,
-            categoria: "Accesorios"
-        },
-        {
-            id: 4,
-            nombre: "Router",
-            precio: 1200,
-            categoria: "Redes"
-        },
-        {
-            id: 5,
-            nombre: "Disco SSD",
-            precio: 1800,
-            categoria: "Almacenamiento"
-        }
-    ];
-    res.json(productos);
+// Ruta de la API de productos conectada dinámicamente a Google Sheets
+app.get("/api/productos", async (req, res) => {
+    try {
+        const response = await fetch(GOOGLE_SHEETS_URL);
+        const productos = await response.json();
+        res.json(productos);
+    } catch (error) {
+        console.error("Error al obtener datos de Google Sheets:", error);
+        res.status(500).json({ error: "No se pudieron obtener los productos." });
+    }
 });
 
 // Iniciar servidor (Siempre al final)
