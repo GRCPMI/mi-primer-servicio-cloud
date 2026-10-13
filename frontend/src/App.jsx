@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 function App() {
-  const API_URL = "https://mi-primer-servicio-cloud-vb64.vercel.app/";
+  const API_URL = "https://mi-primer-servicio-cloud-vb64.vercel.app";
 
   // --- ESTADOS DE AUTENTICACIÓN (LOGIN Y REGISTRO) ---
   const [autenticado, setAutenticado] = useState(false);
