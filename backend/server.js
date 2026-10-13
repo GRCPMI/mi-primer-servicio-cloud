@@ -6,7 +6,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // URL de tu aplicación web de Google Apps Script
-const GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbzZnposxH_GoTd38PXaQ6__ck4ev_iOKwfW099Ln9O49ie8uR7x_yKltori3WgCC0J4/exec ";
+const GOOGLE_SHEETS_URL =  "https://script.google.com/macros/s/AKfycbwUdhg9csS8wwa5sQxzmPDzknWL2fjMIE2aFSgBnDKSrKiAu879mkhp1kV8-qeB4VlSww/exec";
 
 // Middlewares
 app.use(cors());
