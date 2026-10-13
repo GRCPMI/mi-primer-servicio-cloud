@@ -18,7 +18,7 @@ function App() {
   // --- ESTADOS PRINCIPALES DEL SISTEMA ---
   const [productos, setProductos] = useState([]);
   const [cargando, setCargando] = useState(true);
-  const [guardando, setGuardando] = useState(false); // Estado para deshabilitar botón mientras guarda
+  const [guardando, setGuardando] = useState(false);
   const [errorBackend, setErrorBackend] = useState(false);
 
   // --- ESTADOS DE FILTRADO Y BÚSQUEDA ---
@@ -34,8 +34,27 @@ function App() {
   const [categoria, setCategoria] = useState("");
   const [stock, setStock] = useState("");
 
+  // Cargar usuarios registrados desde la nube
+  const cargarUsuarios = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/usuarios`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setUsuariosRegistrados(data);
+        }
+      }
+    } catch (err) {
+      console.error("Error al obtener usuarios:", err);
+    }
+  };
+
+  useEffect(() => {
+    cargarUsuarios();
+  }, []);
+
   // --- MANEJO DEL LOGIN Y REGISTRO ---
-  const handleAuthSubmit = (e) => {
+  const handleAuthSubmit = async (e) => {
     e.preventDefault();
     setMensajeAuth({ texto: "", tipo: "" });
 
@@ -45,20 +64,44 @@ function App() {
         return;
       }
 
-      const existe = usuariosRegistrados.some(u => u.usuario.toLowerCase() === usuarioInput.toLowerCase());
+      const existe = usuariosRegistrados.some(
+        (u) => u.usuario.toLowerCase() === usuarioInput.toLowerCase()
+      );
       if (existe) {
         setMensajeAuth({ texto: "El nombre de usuario ya está registrado.", tipo: "error" });
         return;
       }
 
-      setUsuariosRegistrados([...usuariosRegistrados, { usuario: usuarioInput, password: passwordInput }]);
-      setMensajeAuth({ texto: "¡Usuario registrado con éxito! Ahora puedes iniciar sesión.", tipo: "exito" });
-      setEsRegistro(false);
-      setPasswordInput("");
-      setConfirmPasswordInput("");
+      try {
+        const res = await fetch(`${API_URL}/api/usuarios`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ usuario: usuarioInput, password: passwordInput })
+        });
+
+        if (res.ok) {
+          setUsuariosRegistrados([
+            ...usuariosRegistrados,
+            { usuario: usuarioInput, password: passwordInput }
+          ]);
+          setMensajeAuth({
+            texto: "¡Usuario registrado con éxito en Google Sheets! Inicia sesión.",
+            tipo: "exito"
+          });
+          setEsRegistro(false);
+          setPasswordInput("");
+          setConfirmPasswordInput("");
+        } else {
+          setMensajeAuth({ texto: "Error al guardar el usuario en la nube.", tipo: "error" });
+        }
+      } catch (err) {
+        setMensajeAuth({ texto: "Error de conexión con el servidor.", tipo: "error" });
+      }
     } else {
       const valido = usuariosRegistrados.some(
-        u => u.usuario.toLowerCase() === usuarioInput.toLowerCase() && u.password === passwordInput
+        (u) =>
+          u.usuario.toLowerCase() === usuarioInput.toLowerCase() &&
+          String(u.password) === String(passwordInput)
       );
 
       if (valido) {
@@ -81,11 +124,12 @@ function App() {
   // --- CARGAR PRODUCTOS (READ - GET) ---
   const cargarProductos = async () => {
     setCargando(true);
+    setErrorBackend(false);
     try {
       const res = await fetch(`${API_URL}/api/productos`);
       if (!res.ok) throw new Error("Error al obtener productos");
       const data = await res.json();
-      setProductos(data);
+      setProductos(Array.isArray(data) ? data : []);
       setCargando(false);
     } catch (err) {
       console.error("Error al cargar productos:", err);
@@ -118,7 +162,7 @@ function App() {
   const handleGuardarProducto = async (e) => {
     e.preventDefault();
 
-    if (!nombre || !precio || !categoria) {
+    if (!nombre || precio === "" || !categoria) {
       alert("Por favor completa los campos obligatorios: Nombre, Precio y Categoría.");
       return;
     }
@@ -126,9 +170,9 @@ function App() {
     setGuardando(true);
 
     const productoData = {
-      nombre,
+      nombre: String(nombre).trim(),
       precio: Number(precio),
-      categoria,
+      categoria: String(categoria).trim(),
       stock: stock !== "" ? Number(stock) : 0
     };
 
@@ -141,7 +185,13 @@ function App() {
           body: JSON.stringify(productoData)
         });
 
-        if (!res.ok) throw new Error("Error al actualizar producto");
+        const respuestaJson = await res.json();
+
+        if (res.ok) {
+          alert("¡Producto actualizado con éxito!");
+        } else {
+          throw new Error(respuestaJson.error || "Error al actualizar");
+        }
       } else {
         // PETICIÓN POST (Crear)
         const res = await fetch(`${API_URL}/api/productos`, {
@@ -150,14 +200,20 @@ function App() {
           body: JSON.stringify(productoData)
         });
 
-        if (!res.ok) throw new Error("Error al crear producto");
+        const respuestaJson = await res.json();
+
+        if (res.ok) {
+          alert("¡Producto creado con éxito!");
+        } else {
+          throw new Error(respuestaJson.error || "Error al crear producto");
+        }
       }
 
       limpiarFormulario();
-      await cargarProductos(); // Vuelve a cargar los datos de Google Sheets
+      await cargarProductos(); // Recargar lista desde Google Sheets
     } catch (err) {
       console.error("Error al guardar producto:", err);
-      alert("No se pudo guardar el producto. Revisa la conexión con el servidor.");
+      alert("Ocurrió un error al guardar el producto en la nube.");
     } finally {
       setGuardando(false);
     }
@@ -171,6 +227,7 @@ function App() {
     setPrecio(producto.precio);
     setCategoria(producto.categoria);
     setStock(producto.stock !== undefined ? producto.stock : 0);
+    window.scrollTo({ top: 0, behavior: "smooth" }); // Desplazar arriba al formulario
   };
 
   // --- ELIMINAR PRODUCTO (DELETE) ---
@@ -181,6 +238,7 @@ function App() {
           method: "DELETE"
         });
         if (!res.ok) throw new Error("Error al eliminar producto");
+        alert("¡Producto eliminado correctamente!");
         await cargarProductos();
       } catch (err) {
         console.error("Error en DELETE:", err);
@@ -190,10 +248,12 @@ function App() {
   };
 
   // Filtros de categoría y búsqueda
-  const categorias = ["Todas", ...new Set(productos.map((p) => p.categoria))];
+  const categorias = ["Todas", ...new Set(productos.map((p) => p.categoria).filter(Boolean))];
   const productosFiltrados = productos.filter((producto) => {
-    const coincideNombre = producto.nombre.toLowerCase().includes(busqueda.toLowerCase());
-    const coincideCategoria = categoriaSeleccionada === "Todas" || producto.categoria === categoriaSeleccionada;
+    const nombreProd = producto.nombre ? producto.nombre.toLowerCase() : "";
+    const coincideNombre = nombreProd.includes(busqueda.toLowerCase());
+    const coincideCategoria =
+      categoriaSeleccionada === "Todas" || producto.categoria === categoriaSeleccionada;
     return coincideNombre && coincideCategoria;
   });
 
@@ -317,7 +377,7 @@ function App() {
         <div>
           <h1 style={{ margin: 0, color: "#1976d2" }}>Mi Primer Servicio Cloud</h1>
           <p style={{ margin: "5px 0 0 0", color: "#666" }}>
-            Bienvenido, <strong>{usuarioInput}</strong> | Aplicación React consumiendo API en Render conectada a Google Sheets
+            Bienvenido, <strong>{usuarioInput}</strong> | Aplicación React consumiendo API en Vercel conectada a Google Sheets
           </p>
         </div>
         <button
@@ -380,7 +440,7 @@ function App() {
               type="submit"
               disabled={guardando}
               style={{
-                backgroundColor: modoEdicion ? "#1976d2" : "#2e7d32",
+                backgroundColor: modoEdicion ? "#ff9800" : "#2e7d32",
                 color: "white",
                 border: "none",
                 padding: "10px 20px",
@@ -450,7 +510,7 @@ function App() {
                   backgroundColor: "#ffffff",
                   boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
                   display: "flex",
-                  justifyContent: "space-between",
+                  justifySpaceBetween: "space-between",
                   alignItems: "center"
                 }}
               >
