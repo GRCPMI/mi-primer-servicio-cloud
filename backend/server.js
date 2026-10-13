@@ -6,7 +6,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // URL de tu aplicación web de Google Apps Script
-const GOOGLE_SHEETS_URL =  "https://script.google.com/macros/s/AKfycbzaDiTptU-LN9b5OysFbGUgVI2yWYDGphs_3_ENvy04ggWSIjscwf4e1_2QSR4o0JayLQ/exec";
+const GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbzaDiTptU-LN9b5OysFbGUgVI2yWYDGphs_3_ENvy04ggWSIjscwf4e1_2QSR4o0JayLQ/exec";
 
 // Middlewares
 app.use(cors());
@@ -156,7 +156,7 @@ app.put("/api/productos/:id", async (req, res) => {
     };
 
     const resultado = await postToGoogleSheets(GOOGLE_SHEETS_URL, payload);
-    res.json({ mensaje: "Producto actualizado", respuestaCloud: resultado });
+    res.json({ mensaje: "Producto actualizado con éxito", respuestaCloud: resultado });
   } catch (error) {
     console.error("Error al actualizar producto:", error);
     res.status(500).json({ error: "Error al actualizar el producto en la nube" });
@@ -175,7 +175,7 @@ app.delete("/api/productos/:id", async (req, res) => {
     };
 
     const resultado = await postToGoogleSheets(GOOGLE_SHEETS_URL, payload);
-    res.json({ mensaje: "Producto eliminado", respuestaCloud: resultado });
+    res.json({ mensaje: "Producto eliminado con éxito", respuestaCloud: resultado });
   } catch (error) {
     console.error("Error al eliminar producto:", error);
     res.status(500).json({ error: "Error al eliminar el producto en la nube" });
@@ -225,7 +225,11 @@ app.post("/api/usuarios", async (req, res) => {
   }
 });
 
-// Iniciar servidor
-app.listen(PORT, () => {
-  console.log(`Servidor ejecutándose en puerto ${PORT}`);
-});
+// Exportar para Vercel Serverless & Escucha local
+if (process.env.NODE_ENV !== "production") {
+  app.listen(PORT, () => {
+    console.log(`Servidor ejecutándose localmente en el puerto ${PORT}`);
+  });
+}
+
+module.exports = app;
