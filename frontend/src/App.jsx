@@ -3,6 +3,9 @@ import { useEffect, useState } from "react";
 function App() {
   const API_URL = "https://mi-primer-servicio-cloud-vb64.vercel.app";
 
+  // --- NAVEGACIÓN ENTRE SECCIONES ---
+  const [pestañaActiva, setPestañaActiva] = useState("asistente"); // "asistente" o "crud"
+
   // --- ESTADOS DE AUTENTICACIÓN (LOGIN Y REGISTRO) ---
   const [autenticado, setAutenticado] = useState(false);
   const [esRegistro, setEsRegistro] = useState(false);
@@ -33,6 +36,15 @@ function App() {
   const [precio, setPrecio] = useState("");
   const [categoria, setCategoria] = useState("");
   const [stock, setStock] = useState("");
+
+  // --- ESTADOS DEL ASISTENTE CLOUD CON IA ---
+  const [preguntaIA, setPreguntaIA] = useState("");
+  const [presupuestoIA, setPresupuestoIA] = useState("");
+  const [categoriaIA, setCategoriaIA] = useState("Todas");
+  const [necesidadIA, setNecesidadIA] = useState("");
+  const [respuestaIA, setRespuestaIA] = useState("");
+  const [consultandoIA, setConsultandoIA] = useState(false);
+  const [errorIA, setErrorIA] = useState("");
 
   // Cargar usuarios registrados desde la nube
   const cargarUsuarios = async () => {
@@ -178,7 +190,6 @@ function App() {
 
     try {
       if (modoEdicion) {
-        // PETICIÓN PUT (Actualizar)
         const res = await fetch(`${API_URL}/api/productos/${idEditar}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -193,7 +204,6 @@ function App() {
           throw new Error(respuestaJson.error || "Error al actualizar");
         }
       } else {
-        // PETICIÓN POST (Crear)
         const res = await fetch(`${API_URL}/api/productos`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -210,7 +220,7 @@ function App() {
       }
 
       limpiarFormulario();
-      await cargarProductos(); // Recargar lista desde Google Sheets
+      await cargarProductos();
     } catch (err) {
       console.error("Error al guardar producto:", err);
       alert("Ocurrió un error al guardar el producto en la nube.");
@@ -227,7 +237,8 @@ function App() {
     setPrecio(producto.precio);
     setCategoria(producto.categoria);
     setStock(producto.stock !== undefined ? producto.stock : 0);
-    window.scrollTo({ top: 0, behavior: "smooth" }); // Desplazar arriba al formulario
+    setPestañaActiva("crud");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   // --- ELIMINAR PRODUCTO (DELETE) ---
@@ -244,6 +255,46 @@ function App() {
         console.error("Error en DELETE:", err);
         alert("Error al eliminar el producto.");
       }
+    }
+  };
+
+  // --- CONSULTA AL ASISTENTE DE IA (GEMINI API) ---
+  const handleConsultarIA = async (e) => {
+    e.preventDefault();
+
+    if (!preguntaIA.trim()) {
+      setErrorIA("Escribe una pregunta antes de continuar.");
+      return;
+    }
+
+    setConsultandoIA(true);
+    setErrorIA("");
+    setRespuestaIA("");
+
+    try {
+      const res = await fetch(`${API_URL}/api/asistente`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pregunta: preguntaIA,
+          presupuesto: presupuestoIA,
+          categoria: categoriaIA,
+          necesidad: necesidadIA
+        })
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setRespuestaIA(data.respuesta);
+      } else {
+        setErrorIA(data.error || "No fue posible consultar el servicio Cloud.");
+      }
+    } catch (err) {
+      console.error("Error al consultar IA:", err);
+      setErrorIA("No fue posible conectar con el asistente Cloud.");
+    } finally {
+      setConsultandoIA(false);
     }
   };
 
@@ -369,15 +420,16 @@ function App() {
   }
 
   // ==========================================
-  // 🖥️ VISTA 2: MÓDULO PRINCIPAL DEL SISTEMA (CRUD)
+  // 🖥️ VISTA 2: MÓDULO PRINCIPAL DEL SISTEMA
   // ==========================================
   return (
-    <div style={{ padding: "40px", fontFamily: "Arial, sans-serif", maxWidth: "850px", margin: "0 auto" }}>
+    <div style={{ padding: "40px", fontFamily: "Arial, sans-serif", maxWidth: "900px", margin: "0 auto" }}>
+      {/* Encabezado Principal */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
         <div>
-          <h1 style={{ margin: 0, color: "#1976d2" }}>Mi Primer Servicio Cloud</h1>
+          <h1 style={{ margin: 0, color: "#1976d2" }}>Asistente Cloud con IA</h1>
           <p style={{ margin: "5px 0 0 0", color: "#666" }}>
-            Bienvenido, <strong>{usuarioInput}</strong> | Aplicación React consumiendo API en Vercel conectada a Google Sheets
+            Bienvenido, <strong>{usuarioInput}</strong> | React + Vercel + Google Sheets + Gemini API
           </p>
         </div>
         <button
@@ -397,153 +449,303 @@ function App() {
         </div>
       )}
 
-      {/* Formulario de Creación / Edición */}
-      <div style={{ backgroundColor: "#f5f5f5", padding: "20px", borderRadius: "8px", marginBottom: "25px", border: "1px solid #e0e0e0" }}>
-        <h2 style={{ marginTop: 0, fontSize: "18px", color: "#333" }}>
-          {modoEdicion ? `Modificar Producto (ID: ${idEditar})` : "Agregar Nuevo Producto"}
-        </h2>
-        <form onSubmit={handleGuardarProducto} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-          <input
-            type="text"
-            placeholder="Nombre del Producto *"
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-            style={{ padding: "10px", borderRadius: "5px", border: "1px solid #ccc" }}
-            required
-          />
-          <input
-            type="number"
-            placeholder="Precio *"
-            value={precio}
-            onChange={(e) => setPrecio(e.target.value)}
-            style={{ padding: "10px", borderRadius: "5px", border: "1px solid #ccc" }}
-            required
-          />
-          <input
-            type="text"
-            placeholder="Categoría *"
-            value={categoria}
-            onChange={(e) => setCategoria(e.target.value)}
-            style={{ padding: "10px", borderRadius: "5px", border: "1px solid #ccc" }}
-            required
-          />
-          <input
-            type="number"
-            placeholder="Stock (Cantidad)"
-            value={stock}
-            onChange={(e) => setStock(e.target.value)}
-            style={{ padding: "10px", borderRadius: "5px", border: "1px solid #ccc" }}
-          />
+      {/* Pestañas de Navegación */}
+      <div style={{ display: "flex", gap: "10px", marginBottom: "25px" }}>
+        <button
+          onClick={() => setPestañaActiva("asistente")}
+          style={{
+            flex: 1,
+            padding: "12px",
+            fontSize: "15px",
+            fontWeight: "bold",
+            borderRadius: "6px",
+            border: "none",
+            cursor: "pointer",
+            backgroundColor: pestañaActiva === "asistente" ? "#1976d2" : "#e0e0e0",
+            color: pestañaActiva === "asistente" ? "#ffffff" : "#333333"
+          }}
+        >
+          🤖 Asistente Cloud IA
+        </button>
+        <button
+          onClick={() => setPestañaActiva("crud")}
+          style={{
+            flex: 1,
+            padding: "12px",
+            fontSize: "15px",
+            fontWeight: "bold",
+            borderRadius: "6px",
+            border: "none",
+            cursor: "pointer",
+            backgroundColor: pestañaActiva === "crud" ? "#1976d2" : "#e0e0e0",
+            color: pestañaActiva === "crud" ? "#ffffff" : "#333333"
+          }}
+        >
+          📦 Gestión de Productos (CRUD)
+        </button>
+      </div>
 
-          <div style={{ gridColumn: "span 2", display: "flex", gap: "10px" }}>
+      {/* ==================================================== */}
+      {/* 🤖 PESTAÑA 1: MÓDULO DEL ASISTENTE DE IA              */}
+      {/* ==================================================== */}
+      {pestañaActiva === "asistente" && (
+        <div style={{ backgroundColor: "#ffffff", padding: "25px", borderRadius: "10px", boxShadow: "0 2px 10px rgba(0,0,0,0.08)", border: "1px solid #e0e0e0" }}>
+          <h2 style={{ marginTop: 0, color: "#1976d2", fontSize: "20px" }}>¿Qué deseas consultar sobre nuestro catálogo?</h2>
+          <p style={{ color: "#666", fontSize: "14px", marginBottom: "20px" }}>
+            El asistente analizará en tiempo real el inventario almacenado en Google Sheets para darte la mejor recomendación.
+          </p>
+
+          <form onSubmit={handleConsultarIA} style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
+            <div>
+              <label style={{ fontWeight: "bold", fontSize: "14px", display: "block", marginBottom: "5px", color: "#333" }}>
+                Tu Pregunta o Consulta: *
+              </label>
+              <textarea
+                rows="3"
+                placeholder="Ej. ¿Qué laptop me recomiendas para programación por menos de 18000 pesos?"
+                value={preguntaIA}
+                onChange={(e) => setPreguntaIA(e.target.value)}
+                style={{ width: "100%", padding: "12px", borderRadius: "6px", border: "1px solid #ccc", fontSize: "14px", boxSizing: "border-box" }}
+              />
+            </div>
+
+            {/* Filtros Opcionales */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", backgroundColor: "#f8f9fa", padding: "15px", borderRadius: "8px" }}>
+              <div>
+                <label style={{ fontSize: "12px", color: "#555", fontWeight: "bold", display: "block", marginBottom: "4px" }}>
+                  Presupuesto Máximo ($):
+                </label>
+                <input
+                  type="number"
+                  placeholder="Ej. 18000"
+                  value={presupuestoIA}
+                  onChange={(e) => setPresupuestoIA(e.target.value)}
+                  style={{ width: "100%", padding: "8px", borderRadius: "5px", border: "1px solid #ccc", boxSizing: "border-box" }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: "12px", color: "#555", fontWeight: "bold", display: "block", marginBottom: "4px" }}>
+                  Categoría:
+                </label>
+                <select
+                  value={categoriaIA}
+                  onChange={(e) => setCategoriaIA(e.target.value)}
+                  style={{ width: "100%", padding: "8px", borderRadius: "5px", border: "1px solid #ccc", boxSizing: "border-box" }}
+                >
+                  {categorias.map((cat, idx) => (
+                    <option key={idx} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: "12px", color: "#555", fontWeight: "bold", display: "block", marginBottom: "4px" }}>
+                  Uso / Necesidad:
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej. Programación, Redes"
+                  value={necesidadIA}
+                  onChange={(e) => setNecesidadIA(e.target.value)}
+                  style={{ width: "100%", padding: "8px", borderRadius: "5px", border: "1px solid #ccc", boxSizing: "border-box" }}
+                />
+              </div>
+            </div>
+
             <button
               type="submit"
-              disabled={guardando}
+              disabled={consultandoIA}
               style={{
-                backgroundColor: modoEdicion ? "#ff9800" : "#2e7d32",
-                color: "white",
+                backgroundColor: consultandoIA ? "#90caf9" : "#1976d2",
+                color: "#ffffff",
                 border: "none",
-                padding: "10px 20px",
-                borderRadius: "5px",
-                cursor: guardando ? "not-allowed" : "pointer",
+                padding: "12px 20px",
+                borderRadius: "6px",
+                cursor: consultandoIA ? "not-allowed" : "pointer",
                 fontWeight: "bold",
-                opacity: guardando ? 0.7 : 1
+                fontSize: "15px"
               }}
             >
-              {guardando ? "Guardando en Cloud..." : modoEdicion ? "Guardar Cambios (PUT)" : "Registrar Producto (POST)"}
+              {consultandoIA ? "Analizando información con IA..." : "CONSULTAR ASISTENTE"}
             </button>
-            {modoEdicion && (
-              <button
-                type="button"
-                onClick={limpiarFormulario}
-                style={{ backgroundColor: "#757575", color: "white", border: "none", padding: "10px 15px", borderRadius: "5px", cursor: "pointer" }}
-              >
-                Cancelar
-              </button>
-            )}
-          </div>
-        </form>
-      </div>
+          </form>
 
-      {/* Controles para Buscar y Filtrar */}
-      <div style={{ display: "flex", gap: "15px", marginBottom: "25px" }}>
-        <input
-          type="text"
-          placeholder="Buscar producto por nombre..."
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          style={{ padding: "10px", flex: 1, borderRadius: "5px", border: "1px solid #ccc", fontSize: "14px" }}
-        />
+          {/* Mensajes de Error */}
+          {errorIA && (
+            <div style={{ marginTop: "20px", backgroundColor: "#ffebee", color: "#c62828", padding: "12px 15px", borderRadius: "6px", fontSize: "14px" }}>
+              ⚠️ {errorIA}
+            </div>
+          )}
 
-        <select
-          value={categoriaSeleccionada}
-          onChange={(e) => setCategoriaSeleccionada(e.target.value)}
-          style={{ padding: "10px", borderRadius: "5px", border: "1px solid #ccc", fontSize: "14px" }}
-        >
-          {categorias.map((cat, idx) => (
-            <option key={idx} value={cat}>{cat}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Estados de Carga y Error */}
-      {cargando && <p>Cargando información desde el servidor...</p>}
-      {errorBackend && (
-        <p style={{ color: "#d32f2f", backgroundColor: "#ffebee", padding: "10px", borderRadius: "5px" }}>
-          No fue posible conectar con el servicio backend.
-        </p>
-      )}
-
-      {/* Renderizado de la lista de productos */}
-      {!cargando && !errorBackend && (
-        <div style={{ display: "grid", gap: "15px" }}>
-          {productosFiltrados.length === 0 ? (
-            <p>No se encontraron productos que coincidan con la búsqueda.</p>
-          ) : (
-            productosFiltrados.map((producto) => (
-              <div
-                key={producto.id}
-                style={{
-                  border: "1px solid #e0e0e0",
-                  padding: "15px 20px",
-                  borderRadius: "8px",
-                  backgroundColor: "#ffffff",
-                  boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-                  display: "flex",
-                  justifySpaceBetween: "space-between",
-                  alignItems: "center"
-                }}
-              >
-                <div style={{ flex: 1 }}>
-                  <h3 style={{ margin: "0 0 8px 0", color: "#333" }}>
-                    {producto.nombre} <span style={{ fontSize: "12px", color: "#888" }}>(ID: {producto.id})</span>
-                  </h3>
-                  <p style={{ margin: "4px 0", color: "#2e7d32", fontWeight: "bold" }}>
-                    Precio: ${producto.precio} | Stock: {producto.stock !== undefined ? producto.stock : "N/A"}
-                  </p>
-                  <p style={{ margin: "4px 0", color: "#666", fontSize: "14px" }}>
-                    Categoría: <span>{producto.categoria}</span>
-                  </p>
-                </div>
-
-                <div style={{ display: "flex", gap: "8px" }}>
-                  <button
-                    onClick={() => handleEditar(producto)}
-                    style={{ backgroundColor: "#ff9800", color: "white", border: "none", padding: "8px 12px", borderRadius: "5px", cursor: "pointer", fontSize: "13px" }}
-                  >
-                    Editar
-                  </button>
-                  <button
-                    onClick={() => handleEliminar(producto.id)}
-                    style={{ backgroundColor: "#d32f2f", color: "white", border: "none", padding: "8px 12px", borderRadius: "5px", cursor: "pointer", fontSize: "13px" }}
-                  >
-                    Eliminar
-                  </button>
-                </div>
-              </div>
-            ))
+          {/* Respuesta del Asistente */}
+          {respuestaIA && (
+            <div style={{ marginTop: "25px", backgroundColor: "#f0f7ff", border: "1px solid #b3d8ff", padding: "20px", borderRadius: "8px" }}>
+              <h3 style={{ margin: "0 0 10px 0", color: "#0d47a1", display: "flex", alignItems: "center", gap: "8px" }}>
+                <span>🤖</span> Respuesta del Asistente IA:
+              </h3>
+              <p style={{ color: "#222", lineHeight: "1.6", whiteSpace: "pre-line", margin: 0, fontSize: "15px" }}>
+                {respuestaIA}
+              </p>
+            </div>
           )}
         </div>
+      )}
+
+      {/* ==================================================== */}
+      {/* 📦 PESTAÑA 2: MÓDULO DE GESTIÓN CRUD                  */}
+      {/* ==================================================== */}
+      {pestañaActiva === "crud" && (
+        <>
+          {/* Formulario de Creación / Edición */}
+          <div style={{ backgroundColor: "#f5f5f5", padding: "20px", borderRadius: "8px", marginBottom: "25px", border: "1px solid #e0e0e0" }}>
+            <h2 style={{ marginTop: 0, fontSize: "18px", color: "#333" }}>
+              {modoEdicion ? `Modificar Producto (ID: ${idEditar})` : "Agregar Nuevo Producto"}
+            </h2>
+            <form onSubmit={handleGuardarProducto} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <input
+                type="text"
+                placeholder="Nombre del Producto *"
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                style={{ padding: "10px", borderRadius: "5px", border: "1px solid #ccc" }}
+                required
+              />
+              <input
+                type="number"
+                placeholder="Precio *"
+                value={precio}
+                onChange={(e) => setPrecio(e.target.value)}
+                style={{ padding: "10px", borderRadius: "5px", border: "1px solid #ccc" }}
+                required
+              />
+              <input
+                type="text"
+                placeholder="Categoría *"
+                value={categoria}
+                onChange={(e) => setCategoria(e.target.value)}
+                style={{ padding: "10px", borderRadius: "5px", border: "1px solid #ccc" }}
+                required
+              />
+              <input
+                type="number"
+                placeholder="Stock (Cantidad)"
+                value={stock}
+                onChange={(e) => setStock(e.target.value)}
+                style={{ padding: "10px", borderRadius: "5px", border: "1px solid #ccc" }}
+              />
+
+              <div style={{ gridColumn: "span 2", display: "flex", gap: "10px" }}>
+                <button
+                  type="submit"
+                  disabled={guardando}
+                  style={{
+                    backgroundColor: modoEdicion ? "#ff9800" : "#2e7d32",
+                    color: "white",
+                    border: "none",
+                    padding: "10px 20px",
+                    borderRadius: "5px",
+                    cursor: guardando ? "not-allowed" : "pointer",
+                    fontWeight: "bold",
+                    opacity: guardando ? 0.7 : 1
+                  }}
+                >
+                  {guardando ? "Guardando en Cloud..." : modoEdicion ? "Guardar Cambios (PUT)" : "Registrar Producto (POST)"}
+                </button>
+                {modoEdicion && (
+                  <button
+                    type="button"
+                    onClick={limpiarFormulario}
+                    style={{ backgroundColor: "#757575", color: "white", border: "none", padding: "10px 15px", borderRadius: "5px", cursor: "pointer" }}
+                  >
+                    Cancelar
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
+
+          {/* Controles para Buscar y Filtrar */}
+          <div style={{ display: "flex", gap: "15px", marginBottom: "25px" }}>
+            <input
+              type="text"
+              placeholder="Buscar producto por nombre..."
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              style={{ padding: "10px", flex: 1, borderRadius: "5px", border: "1px solid #ccc", fontSize: "14px" }}
+            />
+
+            <select
+              value={categoriaSeleccionada}
+              onChange={(e) => setCategoriaSeleccionada(e.target.value)}
+              style={{ padding: "10px", borderRadius: "5px", border: "1px solid #ccc", fontSize: "14px" }}
+            >
+              {categorias.map((cat, idx) => (
+                <option key={idx} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Estados de Carga y Error */}
+          {cargando && <p>Cargando información desde el servidor...</p>}
+          {errorBackend && (
+            <p style={{ color: "#d32f2f", backgroundColor: "#ffebee", padding: "10px", borderRadius: "5px" }}>
+              No fue posible conectar con el servicio backend.
+            </p>
+          )}
+
+          {/* Renderizado de la lista de productos */}
+          {!cargando && !errorBackend && (
+            <div style={{ display: "grid", gap: "15px" }}>
+              {productosFiltrados.length === 0 ? (
+                <p>No se encontraron productos que coincidan con la búsqueda.</p>
+              ) : (
+                productosFiltrados.map((producto) => (
+                  <div
+                    key={producto.id}
+                    style={{
+                      border: "1px solid #e0e0e0",
+                      padding: "15px 20px",
+                      borderRadius: "8px",
+                      backgroundColor: "#ffffff",
+                      boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center"
+                    }}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <h3 style={{ margin: "0 0 8px 0", color: "#333" }}>
+                        {producto.nombre} <span style={{ fontSize: "12px", color: "#888" }}>(ID: {producto.id})</span>
+                      </h3>
+                      <p style={{ margin: "4px 0", color: "#2e7d32", fontWeight: "bold" }}>
+                        Precio: ${producto.precio} | Stock: {producto.stock !== undefined ? producto.stock : "N/A"}
+                      </p>
+                      <p style={{ margin: "4px 0", color: "#666", fontSize: "14px" }}>
+                        Categoría: <span>{producto.categoria}</span>
+                      </p>
+                    </div>
+
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <button
+                        onClick={() => handleEditar(producto)}
+                        style={{ backgroundColor: "#ff9800", color: "white", border: "none", padding: "8px 12px", borderRadius: "5px", cursor: "pointer", fontSize: "13px" }}
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => handleEliminar(producto.id)}
+                        style={{ backgroundColor: "#d32f2f", color: "white", border: "none", padding: "8px 12px", borderRadius: "5px", cursor: "pointer", fontSize: "13px" }}
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
