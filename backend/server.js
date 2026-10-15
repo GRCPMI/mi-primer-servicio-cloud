@@ -236,7 +236,6 @@ app.post("/api/asistente", async (req, res) => {
     return res.status(400).json({ error: "Escribe una pregunta antes de continuar." });
   }
 
-  // Verificar la presencia de la API Key en las variables de entorno
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     console.error("Error: GEMINI_API_KEY no está configurada.");
@@ -247,19 +246,19 @@ app.post("/api/asistente", async (req, res) => {
     // 1. Obtener la lista actualizada de productos desde Google Sheets
     const productos = await fetchGoogleSheets(`${GOOGLE_SHEETS_URL}?tipo=productos`);
 
-    // 2. Formatear los productos para inyectarlos en el Contexto del Prompt
+    // 2. Formatear los productos para el prompt
     const catalogoTexto = Array.isArray(productos) && productos.length > 0
       ? productos.map(p => `- ID: ${p.id} | Producto: ${p.nombre} | Precio: $${p.precio} | Categoría: ${p.categoria} | Stock: ${p.stock !== undefined ? p.stock : 'N/A'}`).join("\n")
       : "No hay productos disponibles actualmente en el catálogo.";
 
-    // 3. Construir el Prompt Estructurado
+    // 3. Prompt Estructurado
     const promptEstructurado = `
 Eres un asistente virtual experto de ventas para la tienda "Mi Primer Servicio Cloud".
 Tu objetivo es responder la duda del cliente utilizando ÚNICAMENTE la información del siguiente catálogo de productos.
 
 REGLAS OBLIGATORIAS:
 1. Responde de manera profesional, amable y concisa.
-2. Basate EXCLUSIVAMENTE en el catálogo proporcionado. NO inventes productos, precios ni especificaciones que no estén en la lista.
+2. Básate EXCLUSIVAMENTE en el catálogo proporcionado. NO inventes productos, precios ni especificaciones que no estén en la lista.
 3. Si el usuario pregunta por un producto que no existe en el catálogo, indícalo claramente con amabilidad.
 4. Si el usuario proporciona un presupuesto o necesidad, recomiéndale la mejor opción dentro del catálogo que cumpla con los criterios.
 
@@ -275,11 +274,25 @@ PREGUNTA DEL CLIENTE:
 "${pregunta}"
 `;
 
-    // 4. Inicializar Gemini y generar la respuesta
+    // 4. Inicializar Gemini probando secuencialmente los modelos disponibles
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    let result;
+    const modelosPrueba = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-pro"];
 
-    const result = await model.generateContent(promptEstructurado);
+    for (const nombreModelo of modelosPrueba) {
+      try {
+        const model = genAI.getGenerativeModel({ model: nombreModelo });
+        result = await model.generateContent(promptEstructurado);
+        if (result && result.response) break;
+      } catch (e) {
+        console.warn(`Falló el intento con el modelo ${nombreModelo}, probando siguiente...`, e.message);
+      }
+    }
+
+    if (!result || !result.response) {
+      throw new Error("Ninguno de los modelos de Gemini respondió la solicitud.");
+    }
+
     const responseText = result.response.text();
 
     res.json({
@@ -289,7 +302,7 @@ PREGUNTA DEL CLIENTE:
 
   } catch (error) {
     console.error("Error al procesar consulta con Gemini:", error);
-    res.status(500).json({ error: "El asistente no pudo procesar la solicitud en este momento." });
+    res.status(500).json({ error: "El asistente tuvo un detalle al generar la respuesta. Por favor reintenta en unos segundos." });
   }
 });
 
