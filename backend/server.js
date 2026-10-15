@@ -274,7 +274,7 @@ PREGUNTA DEL CLIENTE:
 `;
 
     // 4. Petición HTTP POST directa a la API REST de Gemini
-    const urlGemini = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const urlGemini = `https://generativelanguage.googleapis.com/v1/models/gemini-3.8-flash:generateContent?key=${apiKey}`;
 
     const responseIA = await fetch(urlGemini, {
       method: "POST",
