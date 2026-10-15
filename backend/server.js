@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const https = require("https");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -222,6 +223,73 @@ app.post("/api/usuarios", async (req, res) => {
   } catch (error) {
     console.error("Error al registrar usuario:", error);
     res.status(500).json({ error: "Error al registrar el usuario en la nube" });
+  }
+});
+
+// ====================================================
+// 🤖 RUTA PARA EL ASISTENTE CON IA (GOOGLE GEMINI)
+// ====================================================
+app.post("/api/asistente", async (req, res) => {
+  const { pregunta, presupuesto, categoria, necesidad } = req.body;
+
+  if (!pregunta) {
+    return res.status(400).json({ error: "Escribe una pregunta antes de continuar." });
+  }
+
+  // Verificar la presencia de la API Key en las variables de entorno
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.error("Error: GEMINI_API_KEY no está configurada.");
+    return res.status(500).json({ error: "El servicio de IA no está configurado correctamente en el servidor." });
+  }
+
+  try {
+    // 1. Obtener la lista actualizada de productos desde Google Sheets
+    const productos = await fetchGoogleSheets(`${GOOGLE_SHEETS_URL}?tipo=productos`);
+
+    // 2. Formatear los productos para inyectarlos en el Contexto del Prompt
+    const catalogoTexto = Array.isArray(productos) && productos.length > 0
+      ? productos.map(p => `- ID: ${p.id} | Producto: ${p.nombre} | Precio: $${p.precio} | Categoría: ${p.categoria} | Stock: ${p.stock !== undefined ? p.stock : 'N/A'}`).join("\n")
+      : "No hay productos disponibles actualmente en el catálogo.";
+
+    // 3. Construir el Prompt Estructurado
+    const promptEstructurado = `
+Eres un asistente virtual experto de ventas para la tienda "Mi Primer Servicio Cloud".
+Tu objetivo es responder la duda del cliente utilizando ÚNICAMENTE la información del siguiente catálogo de productos.
+
+REGLAS OBLIGATORIAS:
+1. Responde de manera profesional, amable y concisa.
+2. Basate EXCLUSIVAMENTE en el catálogo proporcionado. NO inventes productos, precios ni especificaciones que no estén en la lista.
+3. Si el usuario pregunta por un producto que no existe en el catálogo, indícalo claramente con amabilidad.
+4. Si el usuario proporciona un presupuesto o necesidad, recomiéndale la mejor opción dentro del catálogo que cumpla con los criterios.
+
+CATÁLOGO ACTUAL DE PRODUCTOS:
+${catalogoTexto}
+
+DATOS ADICIONALES DE LA CONSULTA DEL USUARIO:
+${presupuesto ? `- Presupuesto Máximo: $${presupuesto}` : ''}
+${categoria && categoria !== 'Todas' ? `- Categoría preferida: ${categoria}` : ''}
+${necesidad ? `- Necesidad/Uso principal: ${necesidad}` : ''}
+
+PREGUNTA DEL CLIENTE:
+"${pregunta}"
+`;
+
+    // 4. Inicializar Gemini y generar la respuesta
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    const result = await model.generateContent(promptEstructurado);
+    const responseText = result.response.text();
+
+    res.json({
+      respuesta: responseText,
+      productosConsultados: Array.isArray(productos) ? productos.length : 0
+    });
+
+  } catch (error) {
+    console.error("Error al procesar consulta con Gemini:", error);
+    res.status(500).json({ error: "El asistente no pudo procesar la solicitud en este momento." });
   }
 });
 
