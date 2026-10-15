@@ -1,7 +1,6 @@
 const express = require("express");
 const cors = require("cors");
 const https = require("https");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -227,7 +226,7 @@ app.post("/api/usuarios", async (req, res) => {
 });
 
 // ====================================================
-// 🤖 RUTA PARA EL ASISTENTE CON IA (GOOGLE GEMINI)
+// 🤖 RUTA PARA EL ASISTENTE CON IA (GEMINI API REST DIRECTA)
 // ====================================================
 app.post("/api/asistente", async (req, res) => {
   const { pregunta, presupuesto, categoria, necesidad } = req.body;
@@ -243,10 +242,10 @@ app.post("/api/asistente", async (req, res) => {
   }
 
   try {
-    // 1. Obtener la lista actualizada de productos desde Google Sheets
+    // 1. Obtener los productos desde Google Sheets
     const productos = await fetchGoogleSheets(`${GOOGLE_SHEETS_URL}?tipo=productos`);
 
-    // 2. Formatear los productos para el prompt
+    // 2. Formatear el catálogo
     const catalogoTexto = Array.isArray(productos) && productos.length > 0
       ? productos.map(p => `- ID: ${p.id} | Producto: ${p.nombre} | Precio: $${p.precio} | Categoría: ${p.categoria} | Stock: ${p.stock !== undefined ? p.stock : 'N/A'}`).join("\n")
       : "No hay productos disponibles actualmente en el catálogo.";
@@ -258,7 +257,7 @@ Tu objetivo es responder la duda del cliente utilizando ÚNICAMENTE la informaci
 
 REGLAS OBLIGATORIAS:
 1. Responde de manera profesional, amable y concisa.
-2. Básate EXCLUSIVAMENTE en el catálogo proporcionado. NO inventes productos, precios ni especificaciones que no estén en la lista.
+2. Básate EXCLUSIVAMENTE en el catálogo proporcionado. NO inventes productos, precios ni especificaciones.
 3. Si el usuario pregunta por un producto que no existe en el catálogo, indícalo claramente con amabilidad.
 4. Si el usuario proporciona un presupuesto o necesidad, recomiéndale la mejor opción dentro del catálogo que cumpla con los criterios.
 
@@ -274,35 +273,38 @@ PREGUNTA DEL CLIENTE:
 "${pregunta}"
 `;
 
-    // 4. Inicializar Gemini probando secuencialmente los modelos disponibles
-    const genAI = new GoogleGenerativeAI(apiKey);
-    let result;
-    const modelosPrueba = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-pro"];
+    // 4. Petición HTTP POST directa a la API REST de Gemini
+    const urlGemini = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
-    for (const nombreModelo of modelosPrueba) {
-      try {
-        const model = genAI.getGenerativeModel({ model: nombreModelo });
-        result = await model.generateContent(promptEstructurado);
-        if (result && result.response) break;
-      } catch (e) {
-        console.warn(`Falló el intento con el modelo ${nombreModelo}, probando siguiente...`, e.message);
-      }
+    const responseIA = await fetch(urlGemini, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [{ text: promptEstructurado }]
+          }
+        ]
+      })
+    });
+
+    const dataIA = await responseIA.json();
+
+    if (!responseIA.ok) {
+      console.error("Error devuelto por la API de Gemini:", dataIA);
+      throw new Error(dataIA.error?.message || "Error al comunicarse con Gemini API");
     }
 
-    if (!result || !result.response) {
-      throw new Error("Ninguno de los modelos de Gemini respondió la solicitud.");
-    }
-
-    const responseText = result.response.text();
+    const respuestaTexto = dataIA.candidates?.[0]?.content?.parts?.[0]?.text || "No se pudo obtener una respuesta del asistente.";
 
     res.json({
-      respuesta: responseText,
+      respuesta: respuestaTexto,
       productosConsultados: Array.isArray(productos) ? productos.length : 0
     });
 
   } catch (error) {
-    console.error("Error al procesar consulta con Gemini:", error);
-    res.status(500).json({ error: "El asistente tuvo un detalle al generar la respuesta. Por favor reintenta en unos segundos." });
+    console.error("Error en /api/asistente:", error.message);
+    res.status(500).json({ error: `El asistente no pudo procesar la solicitud: ${error.message}` });
   }
 });
 
