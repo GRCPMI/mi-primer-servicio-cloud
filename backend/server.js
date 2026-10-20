@@ -226,7 +226,7 @@ app.post("/api/usuarios", async (req, res) => {
 });
 
 // ====================================================
-// 🤖 RUTA PARA EL ASISTENTE CON IA (GEMINI API REST)
+// 🤖 RUTA PARA EL ASISTENTE CON IA (GEMINI 3.8 FLASH REST)
 // ====================================================
 app.post("/api/asistente", async (req, res) => {
   const { pregunta, presupuesto, categoria, necesidad } = req.body;
@@ -273,43 +273,29 @@ PREGUNTA DEL CLIENTE:
 "${pregunta}"
 `;
 
-    // 4. Probar secuencialmente los modelos activos de Gemini
-    const modelosPrueba = [
-      "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent",
-      "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent",
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
-    ];
+    // 4. Petición HTTP POST a la API REST v1 con el modelo gemini-3.8-flash
+    const urlGemini = `https://generativelanguage.googleapis.com/v1/models/gemini-3.8-flash:generateContent?key=${apiKey}`;
 
-    let respuestaTexto = null;
-    let erroresDetallados = [];
+    const responseIA = await fetch(urlGemini, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [{ text: promptEstructurado }]
+          }
+        ]
+      })
+    });
 
-    for (const baseUrl of modelosPrueba) {
-      try {
-        const urlFinal = `${baseUrl}?key=${apiKey}`;
-        const responseIA = await fetch(urlFinal, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: promptEstructurado }] }]
-          })
-        });
+    const dataIA = await responseIA.json();
 
-        const dataIA = await responseIA.json();
-
-        if (responseIA.ok && dataIA.candidates?.[0]?.content?.parts?.[0]?.text) {
-          respuestaTexto = dataIA.candidates[0].content.parts[0].text;
-          break;
-        } else {
-          erroresDetallados.push(dataIA.error?.message || `HTTP ${responseIA.status}`);
-        }
-      } catch (e) {
-        erroresDetallados.push(e.message);
-      }
+    if (!responseIA.ok) {
+      console.error("Error devuelto por Gemini API:", dataIA);
+      throw new Error(dataIA.error?.message || "Error al comunicarse con Gemini API");
     }
 
-    if (!respuestaTexto) {
-      throw new Error(erroresDetallados.join(" | ") || "No se pudo obtener respuesta del modelo.");
-    }
+    const respuestaTexto = dataIA.candidates?.[0]?.content?.parts?.[0]?.text || "No se pudo obtener una respuesta del asistente.";
 
     res.json({
       respuesta: respuestaTexto,
