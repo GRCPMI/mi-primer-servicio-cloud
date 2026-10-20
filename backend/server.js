@@ -226,7 +226,7 @@ app.post("/api/usuarios", async (req, res) => {
 });
 
 // ====================================================
-// 🤖 RUTA PARA EL ASISTENTE CON IA (FALLBACK MULTIMODELO)
+// 🤖 RUTA PARA EL ASISTENTE CON IA (GEMINI API REST)
 // ====================================================
 app.post("/api/asistente", async (req, res) => {
   const { pregunta, presupuesto, categoria, necesidad } = req.body;
@@ -273,14 +273,20 @@ PREGUNTA DEL CLIENTE:
 "${pregunta}"
 `;
 
-    // 4. Probar secuencialmente con varios modelos para evitar picos de tráfico
-    const modelos = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.5-flash"];
-    let respuestaTexto = null;
+    // 4. Probar secuencialmente los modelos activos de Gemini
+    const modelosPrueba = [
+      "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent",
+      "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+    ];
 
-    for (const modelo of modelos) {
+    let respuestaTexto = null;
+    let erroresDetallados = [];
+
+    for (const baseUrl of modelosPrueba) {
       try {
-        const urlGemini = `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${apiKey}`;
-        const responseIA = await fetch(urlGemini, {
+        const urlFinal = `${baseUrl}?key=${apiKey}`;
+        const responseIA = await fetch(urlFinal, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -289,17 +295,20 @@ PREGUNTA DEL CLIENTE:
         });
 
         const dataIA = await responseIA.json();
+
         if (responseIA.ok && dataIA.candidates?.[0]?.content?.parts?.[0]?.text) {
           respuestaTexto = dataIA.candidates[0].content.parts[0].text;
-          break; // Respuesta obtenida con éxito
+          break;
+        } else {
+          erroresDetallados.push(dataIA.error?.message || `HTTP ${responseIA.status}`);
         }
       } catch (e) {
-        console.warn(`El modelo ${modelo} falló, intentando siguiente...`);
+        erroresDetallados.push(e.message);
       }
     }
 
     if (!respuestaTexto) {
-      throw new Error("El servicio de IA se encuentra momentáneamente ocupado. Intenta de nuevo en unos segundos.");
+      throw new Error(erroresDetallados.join(" | ") || "No se pudo obtener respuesta del modelo.");
     }
 
     res.json({
@@ -309,7 +318,7 @@ PREGUNTA DEL CLIENTE:
 
   } catch (error) {
     console.error("Error en /api/asistente:", error.message);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: `El asistente no pudo procesar la solicitud: ${error.message}` });
   }
 });
 
